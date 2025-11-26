@@ -1,0 +1,136 @@
+ Project Structure
+
+time-tracker-extension/
+│── manifest.json
+│── popup.html
+│── popup.js
+│── background.js
+│── style.css
+
+ 1. `manifest.json`
+Defines the extension’s metadata and permissions.
+
+```json
+{
+  "manifest_version": 3,
+  "name": "Time Tracker & Productivity Analytics",
+  "version": "1.0",
+  "description": "Track time spent on websites and analyze productivity.",
+  "permissions": ["tabs", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  }
+}
+```
+
+2. `popup.html`
+
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Time Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>⏱ Productivity Tracker</h2>
+  <div id="stats">
+    <p>Total Time: <span id="totalTime">0</span> mins</p>
+    <p>Most Visited: <span id="topSite">N/A</span></p>
+  </div>
+  <button id="reset">Reset Data</button>
+  <script src="popup.js"></script>
+</body>
+</html>
+```
+
+3. `popup.js`
+Handles UI logic and retrieves stored analytics.
+
+```javascript
+document.addEventListener("DOMContentLoaded", () => {
+  chrome.storage.local.get(["timeData"], (result) => {
+    const data = result.timeData || {};
+    let total = 0;
+    let topSite = "N/A";
+    let max = 0;
+
+    for (const site in data) {
+      total += data[site];
+      if (data[site] > max) {
+        max = data[site];
+        topSite = site;
+      }
+    }
+
+    document.getElementById("totalTime").textContent = total;
+    document.getElementById("topSite").textContent = topSite;
+  });
+
+  document.getElementById("reset").addEventListener("click", () => {
+    chrome.storage.local.set({ timeData: {} });
+    document.getElementById("totalTime").textContent = 0;
+    document.getElementById("topSite").textContent = "N/A";
+  });
+});
+```
+
+
+
+4. `background.js`
+Tracks time spent on active tabs.
+
+```javascript
+let activeTab = null;
+let startTime = null;
+
+chrome.tabs.onActivated.addListener(activeInfo => {
+  updateTime();
+  activeTab = activeInfo.tabId;
+  startTime = Date.now();
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.active && changeInfo.status === "complete") {
+    updateTime();
+    activeTab = tabId;
+    startTime = Date.now();
+  }
+});
+
+function updateTime() {
+  if (activeTab && startTime) {
+    const duration = Math.floor((Date.now() - startTime) / 60000); // minutes
+    chrome.tabs.get(activeTab, (tab) => {
+      if (tab && tab.url) {
+        const domain = new URL(tab.url).hostname;
+        chrome.storage.local.get(["timeData"], (result) => {
+          const data = result.timeData || {};
+          data[domain] = (data[domain] || 0) + duration;
+          chrome.storage.local.set({ timeData: data });
+        });
+      }
+    });
+  }
+}
+```
+
+5. `style.css`
+Basic styling.
+
+```css
+body { font-family: Arial, sans-serif; padding: 10px; }
+h2 { margin-top: 0; }
+#stats { margin: 10px 0; }
+button { background: #007BFF; color: #fff; border: none; padding: 8px; cursor: pointer; }
+button:hover { background: #0056b3; }
+```
